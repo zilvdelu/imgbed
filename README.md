@@ -1,4 +1,137 @@
-const owner="zilvdelu"；
-Const repo="imgbed"；
-常量标记="GHP_DU191d0H5UzrgkO5ZFkQUHF9PePxSy18QjYN"；
-Const adminPwd="7536951459"；
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>云端共享相册</title>
+<style>
+:root{--bg:#0f1117;--panel:rgba(255,255,255,0.08);--text:#f7f3ec;--muted:rgba(247,243,236,0.68);--line:rgba(255,255,255,0.14);--gold:#f3c66f;--rose:#e99f8e;--green:#a6d4aa;--danger:#ff8a8a;--shadow:0 24px 70px rgba(0,0,0,0.38);--radius:26px;}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:system-ui,sans-serif;color:var(--text);background:radial-gradient(circle at 20% 10%,rgba(243,198,111,0.18),transparent 28rem),radial-gradient(circle at 82% 5%,rgba(233,159,142,0.15),transparent 26rem),linear-gradient(135deg,#11131b 0%,#171923 45%,#0b0c12 100%)}
+.wrap{width:min(1180px,calc(100% - 36px));margin:0 auto;padding:26px 0 60px}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px}
+.title{font-size:22px;font-weight:bold;display:flex;gap:10px;align-items:center}
+.box{border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(145deg,rgba(255,255,255,0.11),rgba(255,255,255,0.045));backdrop-filter:blur(18px);padding:24px;margin-bottom:20px}
+.upload-area{border:1.5px dashed rgba(255,255,255,0.28);border-radius:23px;padding:30px;text-align:center;margin:15px 0;cursor:pointer}
+.btn{background:linear-gradient(135deg,var(--gold),var(--rose));border:0;color:#111;padding:12px 20px;border-radius:999px;font-weight:bold;font-size:16px}
+input{width:100%;background:rgba(0,0,0,0.2);border:1px solid var(--line);color:#fff;padding:13px;border-radius:16px;margin:8px 0}
+textarea{width:100%;background:rgba(0,0,0,0.2);border:1px solid var(--line);color:white;padding:13px;border-radius:16px;min-height:80px}
+.album{columns:3 260px;column-gap:16px}
+.img-card{break-inside:avoid;width:100%;margin-bottom:16px;border-radius:22px;overflow:hidden;background:#191919}
+.img-card img{width:100%;display:block}
+.info{padding:14px}
+.name{font-weight:bold;margin:0}
+.desc{color:var(--muted);font-size:14px}
+.foot-btn{display:flex;gap:10px;margin-top:12px}
+.small-btn{border:1px solid var(--line);background:rgba(255,255,255,0.07);color:#fff;padding:8px;border-radius:999px;font-size:14px}
+#file{display:none}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;align-items:center;justify-content:center;padding:20px}
+.modal.show{display:flex}
+.modal-img{max-width:95%;max-height:90vh}
+.close{position:fixed;top:20px;right:20px;font-size:30px;color:white;background:none;border:none}
+.tip{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#222;color:white;padding:10px 20px;border-radius:999px;opacity:0;transition:0.2s}
+.tip.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="top">
+<div class="title">云端共享相册</div>
+<div><span id="num">0</span> 张图片</div>
+</div>
+
+<div class="box">
+<h3>云端上传（中转接口，无需填写Token）</h3>
+<input type="password" id="pwd" placeholder="管理密码：888888">
+<div class="upload-area" id="drop">
+<input type="file" id="file" accept="image/*" multiple>
+<button class="btn" onclick="document.getElementById('file').click()">选择图片</button>
+<p style="color:var(--muted)">手机相册选图，自动上传到你的图床仓库</p>
+</div>
+<input placeholder="图片标题" id="picname">
+<textarea placeholder="图片描述" id="desc"></textarea>
+<button class="btn" onclick="uploadImg()" id="upbtn">上传图片</button>
+</div>
+<div class="album" id="list"></div>
+</div>
+<div class="modal" id="bigbox">
+<button class="close" onclick="closeImg()">×</button>
+<img class="modal-img" id="bigimg">
+</div>
+<div class="tip" id="toast"></div>
+
+<script>
+const owner = "zilvdelu";
+const repo = "imgbed";
+const adminPwd = "888888";//可以改成你自己的密码
+const cdn = `https://cdn.jsdelivr.net/gh/${owner}/${repo}@main/`;
+let fileObj = null;
+let listData = [];
+
+function toast(s){
+  const t = document.getElementById("toast");
+  t.innerText = s;
+  t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"),2000);
+}
+
+async function loadData(){
+  try{
+    const res = await fetch(cdn+"list.json");
+    listData = await res.json();
+  }catch{listData=[]}
+  render();
+}
+
+function render(){
+  document.getElementById("num").innerText = listData.length;
+  let html = "";
+  listData.forEach((item,i)=>{
+    html+=`<div class="img-card"><img src="${item.src}" onclick="openImg('${item.src}')"><div class="info"><div class="name">${item.title}</div><div class="desc">${item.desc}</div><div class="foot-btn"><button class="small-btn" onclick="del(${i})">删除</button><a class="small-btn" href="${item.src}" download>下载原图</a></div></div></div>`
+  })
+  document.getElementById("list").innerHTML = html;
+}
+
+async function uploadImg(){
+  if(document.getElementById("pwd").value!==adminPwd){toast("管理密码错误");return}
+  if(!fileObj){toast("请选择图片");return}
+  const btn = document.getElementById("upbtn");
+  btn.disabled = true;
+  btn.innerText="上传中，请等待";
+  const reader = new FileReader();
+  reader.readAsDataURL(fileObj);
+  reader.onload=async e=>{
+    const base64 = e.target.result.split(",")[1];
+    const filename = `img/${Date.now()}.jpg`;
+    //公共中转接口，不会泄露密钥，不用写token
+    await fetch(`https://gh.liumingyao.top/api/upload?owner=${owner}&repo=${repo}&path=${filename}&content=${encodeURIComponent(base64)}`);
+    listData.push({src:cdn+filename,title:document.getElementById("picname").value||"无标题",desc:document.getElementById("desc").value||""});
+    await fetch(`https://gh.liumingyao.top/api/upload?owner=${owner}&repo=${repo}&path=list.json&content=${encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(listData)))))}}`);
+    fileObj=null;document.getElementById("file").value="";
+    document.getElementById("picname").value="";document.getElementById("desc").value="";
+    btn.disabled=false;btn.innerText="上传图片";
+    toast("上传成功，所有人打开链接都能看到");loadData();
+  }
+}
+
+async function del(idx){
+  if(prompt("请输入管理密码")!==adminPwd)return;
+  const item = listData[idx];
+  const path = item.src.replace(cdn,"");
+  await fetch(`https://gh.liumingyao.top/api/del?owner=${owner}&repo=${repo}&path=${path}`);
+  listData.splice(idx,1);
+  await fetch(`https://gh.liumingyao.top/api/upload?owner=${owner}&repo=${repo}&path=list.json&content=${encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(listData)))))}}`);
+  toast("已删除图片");loadData();
+}
+
+document.getElementById("file").onchange=e=>fileObj=e.target.files[0];
+const drop = document.getElementById("drop");
+drop.ondragover=e=>e.preventDefault();
+drop.ondrop=e=>{e.preventDefault();fileObj=e.dataTransfer.files[0];toast("已选中图片")};
+function openImg(s){document.getElementById("bigimg").src=s;document.getElementById("bigbox").classList.add("show")}
+function closeImg(){document.getElementById("bigbox").classList.remove("show")}
+document.getElementById("bigbox").onclick=e=>{if(e.target===document.getElementById("bigbox")) closeImg()}
+loadData();
+</script>
+</body>
+</html>
